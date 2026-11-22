@@ -222,9 +222,9 @@ class HudCanvas(QWidget):
         self._core_phase += min(0.10, max(0.0, dt))
 
         if self._reactor is not None:
-            if self._reactor is not None:
-                self._reactor.step(dt, self.speaking,
-                                   self.state in ("THINKING", "PROCESSING"), self.muted)
+            self._reactor.step(dt, self.speaking,
+                               self.state in ("THINKING", "PROCESSING"), self.muted)
+        else:
             # Fallback core: slow "breathing" base target, lifted by the level.
             if now - self._last_t > (0.12 if self.speaking else 0.5):
                 if self.speaking:
