@@ -35,7 +35,6 @@ from PyQt6.QtWidgets import (
 
 from gui.theme import (
     C,
-    HoloAvatar,
     qcol,
 )
 
@@ -48,7 +47,7 @@ except Exception:      # pragma: no cover — the classic core still draws
 
 
 class HudCanvas(QWidget):
-    def __init__(self, face_path: str, assistant_name: str = "J.A.R.V.I.S", parent=None):
+    def __init__(self, assistant_name: str = "J.A.R.V.I.S", parent=None)
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
         self.setMinimumSize(300, 300)
@@ -58,15 +57,6 @@ class HudCanvas(QWidget):
         self.speaking = False
         self.state    = "INITIALISING"
         self._assistant_name = assistant_name
-
-        # The holographic head that fills the HUD. If it could not be imported
-        # we fall back to the old glowing core so the panel is never empty.
-        self._avatar = None
-        if HoloAvatar is not None:
-            try:
-                self._avatar = HoloAvatar()
-            except Exception:
-                self._avatar = None
 
         # The reactor core in three dimensions (gui/reactor.py). The flat ring
         # stack it replaced is kept whole as _paint_core_classic, and it is
@@ -78,14 +68,6 @@ class HudCanvas(QWidget):
             except Exception:
                 self._reactor = None
 
-        # Which centrepiece to draw. Read once here and changed live by the
-        # settings toggle; the avatar object is kept either way so switching
-        # back is instant and costs no reload.
-        try:
-            from memory.config_manager import get_hud_style
-            self.hud_style = get_hud_style()
-        except Exception:
-            self.hud_style = "face"
         self._core_phase = 0.0
 
         self._tick       = 0
@@ -98,9 +80,6 @@ class HudCanvas(QWidget):
         self._blink      = True
         self._blink_tick = 0
 
-        # Rescaled-face cache: the smooth rescale is expensive, so we keep the
-        # last result and only rebuild it when the (quantised) size changes.
-
         # Static grid-dot layer, pre-rendered once per size/theme into a pixmap
         # so paintEvent blits it in one call instead of thousands of drawPoint()s.
         self._grid_cache: QPixmap | None = None
@@ -112,77 +91,12 @@ class HudCanvas(QWidget):
         # (0.0–1.0), _amp_disp is the smoothed value the paint code reads.
         self._live_amp  = 0.0
         self._amp_disp  = 0.0
-        # (frames, start_time, hop) posted by the playback thread — see
-        # push_visemes(). None means "no schedule; use the plain level".
-        self._visemes = None
-        self._vis_i = None        # first schedule frame not yet handed to the mouth
         self._base_scale = 1.0    # slow "breathing" target; amp is added per-frame
         self._base_halo  = 55.0
 
         self._tmr = QTimer(self)
         self._tmr.timeout.connect(self._step)
         self._tmr.start(16)
-
-    def glance(self, dx: float, dy: float, hold: float = 1.1) -> None:
-        """Ask the avatar to look somewhere for a moment (see HoloAvatar.glance)."""
-        try:
-            if self._avatar is not None:
-                self._avatar.glance(dx, dy, hold)
-        except Exception:
-            pass
-
-    def push_visemes(self, frames, hop: float, at: float) -> None:
-        """Thread-safe: hand over a schedule of (level, openness, width) frames.
-
-        The playback thread writes up to 200 ms of audio in one go, so a single
-        averaged level would only move the mouth five times a second — enough to
-        flap, nowhere near enough to articulate. It instead posts the whole
-        slice's worth of 20 ms frames here and `_step()` plays them out against
-        the wall clock, in step with the audio going to the speakers.
-
-        `at` is the wall-clock time this batch will *begin to sound*, which the
-        caller tracks as a playback cursor. It is not the time of the call, and
-        the difference is the whole point: `stream.write` returns once the buffer
-        accepts the samples, so consecutive batches are handed over far faster
-        than they play. Anchoring each one to "now" made every batch start while
-        its predecessor was still sounding, so each schedule replaced the last
-        after a couple of frames and the mouth only ever played the opening
-        instant of every 200 ms — the reason it did not match the words.
-
-        Successive batches are therefore *appended* into one continuous
-        timeline, not swapped in. A paragraph is one schedule; the mouth stops
-        falling into a gap at every chunk boundary and having to climb back out.
-        """
-        try:
-            if not frames:
-                return
-            hop = max(1e-3, float(hop))
-            at = float(at)
-            new = list(frames)
-            cur = self._visemes
-            if cur is not None:
-                old, t0, ohop = cur
-                if abs(ohop - hop) < 1e-6:
-                    # Where in the existing timeline does this batch land?
-                    i = int(round((at - t0) / hop))
-                    if 0 <= i <= len(old) + 1:
-                        # Continues (or slightly overlaps) what is already
-                        # queued: extend rather than restart. Drop whatever has
-                        # already been played so the list cannot grow without
-                        # bound over a long reply.
-                        merged = old[:i] + new
-                        played = int((time.time() - t0) / hop) - 2
-                        if played > 60:
-                            merged = merged[played:]
-                            t0 += played * hop
-                            if self._vis_i is not None:
-                                self._vis_i = max(0, self._vis_i - played)
-                        self._visemes = (merged, t0, hop)
-                        return
-            self._visemes = (new, at, hop)
-            self._vis_i = None
-        except Exception:
-            pass
 
     def set_audio_level(self, level: float) -> None:
         """Thread-safe entry point for the audio threads. Stores the louder of
@@ -292,35 +206,6 @@ class HudCanvas(QWidget):
         self._tick += 1
         now = time.time()
 
-        # ── Live audio reactivity ────────────────────────────────────────────
-        # A viseme schedule, if one is playing, gives both the level and the
-        # mouth shape for this exact instant; otherwise fall back to the peak
-        # level the audio threads pushed in.
-        v_open = v_wide = v_level = None
-        v_seq = None
-        sched = self._visemes
-        if sched is not None:
-            frames, t0, hop = sched
-            i = int((now - t0) / hop)
-            if 0 <= i < len(frames):
-                # Hand over *every* frame since the last tick, not just the one
-                # under the cursor. This timer runs at 60 Hz but the paint is
-                # throttled and the machine may be busy, so a tick can span two
-                # or three 20 ms frames — and a consonant closure is only two
-                # frames long. Sampling one and discarding the rest is how the
-                # closures between words went missing.
-                j = self._vis_i if self._vis_i is not None else i
-                v_seq = frames[max(0, j):i + 1]
-                self._vis_i = max(j, i + 1)
-                v_level, v_open, v_wide = frames[i]
-                if v_seq:
-                    peak = max(f[0] for f in v_seq)
-                    if peak > self._live_amp:
-                        self._live_amp = peak
-            elif i >= len(frames):
-                self._visemes = None        # schedule spent
-                self._vis_i = None
-
         # Audio threads push peaks into _live_amp; decay it toward silence so
         # gaps between chunks fade out instead of freezing, then smooth it.
         self._live_amp *= 0.86
@@ -336,13 +221,7 @@ class HudCanvas(QWidget):
         # starts talking. Same lesson the head's sway taught.
         self._core_phase += min(0.10, max(0.0, dt))
 
-        if self._avatar is not None and self.hud_style == "face":
-            self._avatar.step(dt, amp, speaking=self.speaking,
-                              muted=self.muted, state=self.state,
-                              v_open=v_open, v_wide=v_wide or 0.0,
-                              v_level=v_level, v_seq=v_seq,
-                              v_hop=(sched[2] if sched is not None else 0.02))
-        else:
+        if self._reactor is not None:
             if self._reactor is not None:
                 self._reactor.step(dt, self.speaking,
                                    self.state in ("THINKING", "PROCESSING"), self.muted)
@@ -610,23 +489,7 @@ class HudCanvas(QWidget):
         band_t = 30.0
         band_h = max(60.0, sy - 14.0 - band_t)
 
-        if self._avatar is not None and self.hud_style == "face":
-            r_head = min(fw * 0.355, band_h / (self._avatar.SPAN + 0.08))
-            head_cy = band_t + (band_h - self._avatar.SPAN * r_head) / 2.0 + r_head
-            if self.muted:
-                main = acc = qcol(C.MUTED_C)
-            else:
-                main = qcol(C.PRI)
-                if self.speaking:
-                    acc = qcol(C.ACC)
-                elif self.state in ("THINKING", "PROCESSING"):
-                    acc = qcol(C.ACC2)
-                elif self.state == "LISTENING":
-                    acc = qcol(C.GREEN)
-                else:
-                    acc = qcol(C.PRI)
-            self._avatar.paint(p, cx, head_cy, r_head, main, acc, qcol(C.BG))
-        elif self._reactor is not None:
+        if self._reactor is not None:
             ext = Reactor3D.TOP + Reactor3D.BOTTOM
             r = min(W * 0.25, band_h / ext)
             core_cy = band_t + (band_h - ext * r) / 2.0 + Reactor3D.TOP * r
