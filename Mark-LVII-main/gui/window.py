@@ -118,9 +118,8 @@ class MainWindow(QMainWindow):
     _quiz_hide_sig  = pyqtSignal()
     _review_sig     = pyqtSignal(str, str, object, object)  # document review payload
 
-    def __init__(self, face_path: str):
+    def __init__(self):
         super().__init__()
-        self._face_path = face_path
 
         # Load customization from config
         _cfg = _read_full_config()
@@ -177,7 +176,7 @@ class MainWindow(QMainWindow):
         body.addWidget(self._left_panel, stretch=0)
 
         # Center column: HUD + resizable content panel via QSplitter
-        self.hud = HudCanvas(face_path, _display)
+        self.hud = HudCanvas(_display)
         self.hud.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._content_panel = self._build_content_panel()
         self._quiz_panel = self._build_quiz_panel()
@@ -1696,9 +1695,6 @@ class MainWindow(QMainWindow):
         self._ptt_btn.clicked.connect(self._toggle_ptt)
         self._refresh_talk_btns()
 
-        self._hud_btn = _row(QPushButton())
-        self._hud_btn.clicked.connect(self._toggle_hud_style)
-        self._refresh_hud_btn()
 
         w.adjustSize()
         return w
@@ -1864,7 +1860,6 @@ class MainWindow(QMainWindow):
         import time as _time
         # The panel opens below the head, so the head looks down at it. It is a
         # tiny thing that answers "did that land?" before you read a word.
-        self.hud.glance(0.0, -0.85, hold=1.3)
         # Only the app's own label is upper-cased ("NEWS — …"); what follows the
         # dash is a search or a name in the user's language, and str.upper()
         # applies English rules to it (Turkish "istanbul" -> "ISTANBUL").
@@ -1957,7 +1952,6 @@ class MainWindow(QMainWindow):
         # setHtml jumps to the top; put the reader back where they were.
         bar.setValue(keep)
         if first:
-            self.hud.glance(0.0, -0.85, hold=1.3)
         self._reveal_below_hud(self._content_panel, 260)
 
     # ── document review ──────────────────────────────────────────────────────
@@ -2027,7 +2021,6 @@ class MainWindow(QMainWindow):
         parts.append('</div>')
 
         import time as _time
-        self.hud.glance(0.0, -0.85, hold=1.3)
         # Left as written, not upper-cased. The other content-panel titles are
         # the app's own English labels, but this one is the document's name in
         # the user's language, and str.upper() applies English casing rules to
@@ -2118,7 +2111,6 @@ class MainWindow(QMainWindow):
             "answered": False,
         }
         self._quiz_title_lbl.setText((topic or "quiz").upper()[:48])
-        self.hud.glance(0.0, -0.85, hold=1.3)
         self._reveal_below_hud(self._quiz_panel, 250)
         self._quiz_render()
 
@@ -2497,37 +2489,6 @@ class MainWindow(QMainWindow):
             "Microphone stays closed until you hold the key — nothing is sent "
             "while you are not holding it." if ptt
             else "Hold a key to talk instead of streaming the mic continuously.")
-
-    def _refresh_hud_btn(self):
-        from memory.config_manager import get_hud_style
-        face = get_hud_style() == "face"
-        # Neither state is "off", so both read as active — this is a choice
-        # between two things, not a switch with a disabled side.
-        self._hud_btn.setText("🧑  HUD: ANIMATED FACE" if face
-                              else "◉  HUD: REACTOR CORE")
-        self._hud_btn.setStyleSheet(btn_css("choice"))
-        self._hud_btn.setToolTip(
-            "An animated head that speaks your words and shows what JARVIS is "
-            "doing. Tap to switch to the reactor core."
-            if face else
-            "A 3-D reactor core that turns with the state and moves with your "
-            "voice. Tap to switch to the animated head.")
-
-    def _toggle_hud_style(self):
-        """Swap the centrepiece. Both objects stay in memory, so the change is
-        instant and switching back costs nothing."""
-        from memory.config_manager import get_hud_style, save_hud_style
-        want = "core" if get_hud_style() == "face" else "face"
-        save_hud_style(want)
-        try:
-            self.hud.hud_style = want
-            self.hud.update()
-        except Exception:
-            pass
-        self._refresh_hud_btn()
-        self._log.append_log(
-            "SYS: HUD switched to the animated face." if want == "face"
-            else "SYS: HUD switched to the reactor core.")
 
     def _toggle_ptt(self):
         from memory.config_manager import (get_push_to_talk_enabled,
