@@ -98,11 +98,11 @@ def _apply_ui_scale() -> None:
 
 
 class JarvisUI:
-    def __init__(self, face_path: str, size=None):
+    def __init__(self, size=None)
         _apply_ui_scale()
         self._app = QApplication.instance() or QApplication(sys.argv)
         self._app.setStyle("Fusion")
-        self._win = MainWindow(face_path)
+        self._win = MainWindow()
         self.root = _RootShim(self._app)
         self._win.show()
 
@@ -217,13 +217,6 @@ class JarvisUI:
         except Exception:
             pass
 
-    def glance(self, dx: float, dy: float, hold: float = 1.1) -> None:
-        """Ask the avatar to look somewhere for a moment (see HoloAvatar.glance)."""
-        try:
-            self._win.hud.glance(dx, dy, hold)
-        except Exception:
-            pass
-
     @property
     def ptt_hold(self):
         return self._win.ptt_hold
@@ -239,15 +232,6 @@ class JarvisUI:
     @on_push_to_talk.setter
     def on_push_to_talk(self, cb):
         self._win.on_push_to_talk = cb
-
-    def push_visemes(self, frames, hop: float, at: float) -> None:
-        """Thread-safe: post a schedule of (level, openness, width) mouth frames
-        for JARVIS's own speech. `at` is the wall-clock time the batch begins to
-        sound, not the time of the call. See HudCanvas.push_visemes()."""
-        try:
-            self._win.hud.push_visemes(frames, hop, at)
-        except Exception:
-            pass
 
     def notify_phone_connected(self) -> None:
         self._win.notify_phone_connected()
