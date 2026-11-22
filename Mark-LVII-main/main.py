@@ -2916,7 +2916,7 @@ def _exit_process(code: int = 0) -> None:
 
 
 def main():
-    ui = JarvisUI("face.png")
+    ui = JarvisUI()
     holder: dict = {}
 
     def runner():
