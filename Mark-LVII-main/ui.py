@@ -98,7 +98,7 @@ def _apply_ui_scale() -> None:
 
 
 class JarvisUI:
-    def __init__(self, size=None)
+    def __init__(self, size=None):
         _apply_ui_scale()
         self._app = QApplication.instance() or QApplication(sys.argv)
         self._app.setStyle("Fusion")
