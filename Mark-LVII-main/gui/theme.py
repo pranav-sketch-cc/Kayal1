@@ -59,11 +59,6 @@ from PyQt6.QtWidgets import (
     QStackedWidget, QTextEdit, QVBoxLayout, QWidget, QProgressBar, QSlider,
 )
 
-try:
-    from core.avatar import HoloAvatar
-except Exception:      # pragma: no cover — HUD must never die over cosmetics
-    HoloAvatar = None
-
 
 def _base_dir() -> Path:
     if getattr(sys, "frozen", False):
