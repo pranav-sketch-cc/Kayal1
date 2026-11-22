@@ -2065,10 +2065,7 @@ class JarvisLive:
                     except asyncio.QueueEmpty:
                         break
 
-                # Drive the HUD waveform and the avatar's mouth from JARVIS's
-                # own voice. The batch is up to 200 ms long, so we hand over a
-                # *schedule* of 20 ms viseme frames instead of a single averaged
-                # level and let the HUD play it out in step with the audio.
+                # Drive the HUD waveform and echo guard from the outgoing audio.
                 try:
                     pcm = np.frombuffer(bytes(batch), dtype=np.int16)
                     lvl = _pcm_level(pcm)
