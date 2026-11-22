@@ -47,7 +47,7 @@ except Exception:      # pragma: no cover — the classic core still draws
 
 
 class HudCanvas(QWidget):
-    def __init__(self, assistant_name: str = "J.A.R.V.I.S", parent=None)
+    def __init__(self, assistant_name: str = "J.A.R.V.I.S", parent=None):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
         self.setMinimumSize(300, 300)
@@ -212,13 +212,10 @@ class HudCanvas(QWidget):
         self._amp_disp += (self._live_amp - self._amp_disp) * 0.45
         amp = self._amp_disp
 
-        # The avatar animates off the very same smoothed level the waveform
-        # uses — one audio source, so the mouth can never drift out of sync.
+        # The reactor and waveform share the smoothed audio level.
         dt = now - self._step_t
         self._step_t = now
-        # Integrated, not derived from absolute time: multiplying wall-clock by
-        # a rate that changes with state jumps the rings the instant JARVIS
-        # starts talking. Same lesson the head's sway taught.
+        # Integrated phase avoids jumps when animation state changes.
         self._core_phase += min(0.10, max(0.0, dt))
 
         if self._reactor is not None:
