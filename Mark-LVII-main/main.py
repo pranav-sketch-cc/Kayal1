@@ -92,7 +92,6 @@ from core                      import confirm as confirm_gate
 from core                      import audio_devices
 from core.action_loader        import discover_actions
 from core.echo                 import EchoGuard
-from core.viseme               import VisemeStream
 from core.wake_word            import (
     WakeWordDetector, is_ready as wake_is_ready, install_and_download as wake_install,
 )
@@ -144,18 +143,6 @@ def _pcm_level(samples) -> float:
     return min(1.0, (rms - _LEVEL_FLOOR) / (_LEVEL_FULL - _LEVEL_FLOOR))
 
 
-# ── Viseme extraction ─────────────────────────────────────────────────────────
-# The avatar's mouth used to be driven by one RMS value per ~200 ms write batch,
-# which is five updates a second averaged over a fifth of a second — it could
-# only ever flap. These read the *shape* of each 20 ms slice straight from the
-# spectrum of the audio being played, so no transcript, no forced alignment and
-# no language assumption: it works the same for Turkish and English.
-#
-# Two numbers come out. Openness tracks the first formant — F1 climbs as the jaw
-# drops, so /a/ reads open and /i/ or /u/ read closed. Width tracks the second —
-# F2 is high for spread vowels (/i/, /e/) and low for rounded ones (/u/, /o/).
-# Extra time beyond the device's reported output latency before the microphone
-# is trusted again: covers room decay and the speaker's own settling.
 _TAIL_MARGIN = 0.25
 
 # How long a sent turn may go unanswered before the session is presumed dead.
@@ -177,81 +164,11 @@ _TAIL_MARGIN = 0.25
 # while turning an unbounded hang into a blip.
 _STALL_LIMIT = 30.0
 
-_VIS_WIN = 1024        # ~43 ms analysis window at 24 kHz: enough for formants
-_VIS_HOP = 480         # 20 ms between frames, i.e. 50 shapes a second
-
-# Delay from handing the first bytes of a reply to an already-running output
-# stream to hearing them: one callback period, plus whatever the DAC adds.
-_FIRST_SOUND = CHUNK_SIZE / RECEIVE_SAMPLE_RATE      # ~43 ms
-# How far past the device's own buffer the mouth's timeline may drift before it
-# is re-anchored. The buffer is the hard limit on how much audio can be queued
-# ahead, so anything beyond it plus a margin for clock error is impossible.
-_CURSOR_SLACK = 0.15
-
 # Erring early is the safe direction. A viewer tolerates a mouth that moves
 # slightly before the sound far better than one that moves after it — the
 # broadcast limits are about 45 ms of lag against 125 ms of lead — so where
 # this is uncertain it is biased to lead.
 
-
-def _pcm_visemes(samples, sr: int = 24000):
-    """Slice a PCM block into (level, openness, width) frames, one per 20 ms.
-
-    Returns [] on anything unexpected — the mouth falls back to loudness-only
-    articulation rather than the caller having to handle an error.
-    """
-    try:
-        x = np.asarray(samples, dtype=np.float32)
-        if x.size < _VIS_WIN:
-            return []
-        win = np.hanning(_VIS_WIN).astype(np.float32)
-        freqs = np.fft.rfftfreq(_VIS_WIN, 1.0 / sr)
-        b_f1_lo = (freqs >= 150) & (freqs < 450)     # F1 of close vowels
-        b_f1_hi = (freqs >= 450) & (freqs < 1100)    # F1 of open vowels
-        b_f2_bk = (freqs >= 600) & (freqs < 1300)    # F2 of rounded vowels
-        b_f2_fr = (freqs >= 1700) & (freqs < 3200)   # F2 of spread vowels
-        b_hiss = (freqs >= 3800) & (freqs < 8000)    # fricatives
-
-        # One frame per hop across the *whole* block. Stepping only while a full
-        # window fits stopped 1024 - 480 samples short of the end, so a 200 ms
-        # batch yielded 160 ms of schedule: the mouth ran out of frames before
-        # the audio ran out of sound, and each batch no longer lined up with the
-        # end of the one before it. Losing 20 % of every batch is most of why
-        # the mouth did not track the words.
-        out = []
-        for start in range(0, x.size, _VIS_HOP):
-            # The level gates closures, so it is measured over exactly this
-            # 20 ms and never looks ahead. The spectrum needs a longer window
-            # to resolve formants and may be short-filled at the very end.
-            level = _pcm_level(x[start:start + _VIS_HOP])
-            seg = x[start:start + _VIS_WIN]
-            if seg.size < _VIS_WIN:
-                seg = np.concatenate([seg, np.zeros(_VIS_WIN - seg.size,
-                                                    dtype=np.float32)])
-            if level <= 0.0:
-                out.append((0.0, 0.0, 0.0))
-                continue
-            mag = np.abs(np.fft.rfft((seg - seg.mean()) * win))
-            f1l, f1h = float(mag[b_f1_lo].sum()), float(mag[b_f1_hi].sum())
-            f2b, f2f = float(mag[b_f2_bk].sum()), float(mag[b_f2_fr].sum())
-            hiss = float(mag[b_hiss].sum())
-
-            openness = f1h / (f1l + f1h + 1e-6)
-            width = (f2f - f2b) / (f2f + f2b + 1e-6)
-            # A wide-open jaw physically cannot purse, so openness damps width.
-            # /a/ has a low enough F2 to read as "rounded" on the bands alone;
-            # letting openness suppress the width term is what keeps an open
-            # vowel from pursing.
-            width *= (1.0 - openness) ** 0.8
-            # Fricatives are formed with a nearly closed mouth.
-            h = hiss / (f1l + f1h + f2b + f2f + hiss + 1e-6)
-            openness *= 1.0 - 0.65 * min(1.0, h * 2.5)
-            out.append((level,
-                        float(min(1.0, max(0.0, openness))),
-                        float(min(1.0, max(-1.0, width)))))
-        return out
-    except Exception:
-        return []
 
 
 def _describe_tools(declarations) -> str:
@@ -624,7 +541,6 @@ class JarvisLive:
         self._rx_deadline          = None
         # Transcript-driven mouth shapes for the avatar. Fed from the receive
         # loop as words arrive, drained by the playback loop against the audio.
-        self._visemes              = VisemeStream()
         self._last_out_logged      = ""      # de-dupes a re-sent transcript tail
         # Push-to-talk
         self._ptt_enabled          = False
@@ -639,11 +555,6 @@ class JarvisLive:
         # guessed; see _play_audio.
         self._out_latency          = 0.20    # seconds, replaced with the real value
         self._tail_until           = 0.0     # monotonic time the echo tail expires
-        # Wall-clock time at which the audio written next will begin to sound.
-        # The mouth is scheduled against this, never against "now": batches are
-        # handed to the device far faster than they play, so "now" ran the lips
-        # ahead of the words and cut every schedule short. 0 = nothing playing.
-        self._play_cursor          = 0.0
         self.ui.on_push_to_talk   = self.set_push_to_talk
         self.ui.ptt_hold          = self._on_ptt
         self.ui.on_text_command   = self._on_text_command
@@ -1343,8 +1254,6 @@ class JarvisLive:
                 print(f"[JARVIS] ✋ Interrupted — {drained} audio chunks discarded")
         self.set_speaking(False)
         # The words we were about to mouth are never going to be spoken now.
-        self._visemes.reset()
-        self._play_cursor = 0.0     # next batch starts a fresh timeline
         if self._turn_done_event:
             self._turn_done_event.clear()
         # Draining the queue stops the speakers, but a local engine is still
@@ -2008,11 +1917,6 @@ class JarvisLive:
                             # twice AND made the avatar mouth it twice.
                             if txt and not _is_repeat_chunk(txt, out_buf):
                                 out_buf.append(txt)
-                                # Hand the words to the mouth as they arrive, so
-                                # the avatar can form the consonants the audio
-                                # alone cannot show. Pure string work — it adds
-                                # nothing measurable to the response path.
-                                self._visemes.feed_text(txt)
 
                         if sc.input_transcription and sc.input_transcription.text:
                             txt = _clean_transcript(sc.input_transcription.text)
@@ -2030,7 +1934,6 @@ class JarvisLive:
                                 self._interrupted = False
                                 in_buf  = []
                                 out_buf = []
-                                self._visemes.reset()
                                 continue
 
                             full_in = " ".join(in_buf).strip()
@@ -2168,47 +2071,10 @@ class JarvisLive:
                 # level and let the HUD play it out in step with the audio.
                 try:
                     pcm = np.frombuffer(bytes(batch), dtype=np.int16)
-                    hop = _VIS_HOP / RECEIVE_SAMPLE_RATE
-                    frames = _pcm_visemes(pcm, sr=RECEIVE_SAMPLE_RATE)
-                    # When does this batch become audible? The stream was
-                    # started at launch and its callback has been pulling
-                    # silence ever since, so the first bytes of a reply reach
-                    # the speaker about one callback period later — NOT one
-                    # buffer later. `stream.latency` reports the buffer's
-                    # capacity, which is how much can be queued ahead, and on
-                    # Windows that is commonly 300-500 ms. Anchoring on it put
-                    # the entire schedule a buffer late; that is the half second
-                    # of lag, and it grew with whatever the device reported.
-                    #
-                    # After the anchor nothing needs measuring: the device
-                    # consumes at exactly realtime, so each batch sounds one
-                    # batch-duration after the one before it. The cursor is
-                    # re-anchored only when it leaves the range physically
-                    # possible — behind `now` means the device drained and this
-                    # batch starts a fresh stretch of speech, while further
-                    # ahead than the buffer can hold means it has drifted.
-                    now = time.time()
-                    horizon = self._out_latency + _CURSOR_SLACK
-                    if not (now <= self._play_cursor <= now + horizon):
-                        self._play_cursor = now + _FIRST_SOUND
-                    at = self._play_cursor
-                    # Advance by the batch's own duration whether or not it
-                    # yielded frames, so a block too short to analyse cannot
-                    # shift everything after it out of step with the audio.
-                    self._play_cursor += pcm.size / RECEIVE_SAMPLE_RATE
-                    if frames:
-                        frames = self._visemes.frames(frames, hop)
-                        self.ui.push_visemes(frames, hop, at)
-                        # Barge-in needs to know what we are playing, not just
-                        # how loud: the guard subtracts this from the microphone.
-                        self._out_level = max(f[0] for f in frames)
-                        self._echo.note_output(pcm, RECEIVE_SAMPLE_RATE,
-                                               self._out_level)
-                    else:
-                        lvl = _pcm_level(pcm)
-                        self.ui.set_audio_level(lvl)
-                        self._out_level = lvl
-                        self._echo.note_output(pcm, RECEIVE_SAMPLE_RATE, lvl)
+                    lvl = _pcm_level(pcm)
+                    self.ui.set_audio_level(lvl)
+                    self._out_level = lvl
+                    self._echo.note_output(pcm, RECEIVE_SAMPLE_RATE, lvl)
                 except Exception:
                     pass
 
