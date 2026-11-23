@@ -211,19 +211,6 @@ def _describe_limits(has_vision: bool, has_mic: bool) -> str:
         "- You remember what is in the memory block and what has been said this "
         "session. Anything else you were told before is gone unless it was saved.",
     ]
-    # What the PLATFORM forbids, before what the build lacks.
-    #
-    # On Wayland, and on a macOS without Accessibility, the keyboard, mouse and
-    # screen are simply not available to any program — and the APIs report
-    # success anyway. A model that does not know this reports clicks that never
-    # happened, which is how "it does not work properly on Linux" was described
-    # for a long time without anybody being able to name the failing part.
-    try:
-        from core import platform_support
-        out.extend(platform_support.describe_for_model(platform_support.detect()))
-    except Exception as _e:
-        print(f"[Limits] platform capabilities unavailable: {_e}")
-
     if has_vision:
         out.append(
             "- Your sight is not continuous. You see nothing until you call a "
@@ -2704,24 +2691,6 @@ class JarvisLive:
                         self._awake = True
                         self.ui.set_state("LISTENING")
                         self.ui.write_log("SYS: JARVIS online.")
-
-                    # What this machine will not permit, said once, on screen.
-                    #
-                    # A Wayland session or a macOS without Accessibility cannot
-                    # be typed into, clicked or captured — and the APIs report
-                    # success regardless. Telling the user at startup turns
-                    # "the assistant is broken" into one sentence they can act
-                    # on, and it is said once per session rather than on every
-                    # attempt.
-                    if not self._platform_notes_shown:
-                        self._platform_notes_shown = True
-                        try:
-                            from core import platform_support
-                            for _line in platform_support.describe_for_user(
-                                    platform_support.detect()):
-                                self.ui.write_log(_line)
-                        except Exception as _e:
-                            print(f"[Platform] capability notes unavailable: {_e}")
 
                     if self._dashboard:
                         await self._dashboard.broadcast({"type": "status", "state": "active"})
