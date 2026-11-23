@@ -54,7 +54,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-import platform
 import re
 import shutil
 import subprocess
@@ -66,7 +65,7 @@ from typing import AsyncIterator, Optional
 from . import audio
 from .base import DEFAULT_CAPS, Field
 
-_SYS = platform.system()
+_SYS = "Windows"
 
 # Sentence-ending punctuation across the scripts this assistant is actually used
 # in. Not grammar and not language detection — just the marks after which it is
@@ -176,40 +175,12 @@ def _read_voices() -> list[str]:
             return [l.strip() for l in
                     out.stdout.decode("utf-8", "replace").splitlines() if l.strip()]
 
-        if _SYS == "Darwin":
-            out = _run(["say", "-v", "?"], timeout=20)
-            names = []
-            for line in out.stdout.decode("utf-8", "replace").splitlines():
-                # "Alice               it_IT    # Salve, mi chiamo Alice"
-                name = line.split("  ")[0].strip()
-                if name:
-                    names.append(name)
-            return names
-
-        # Linux
-        if shutil.which("espeak-ng") or shutil.which("espeak"):
-            exe = shutil.which("espeak-ng") or shutil.which("espeak")
-            out = _run([exe, "--voices"], timeout=20)
-            names = []
-            for line in out.stdout.decode("utf-8", "replace").splitlines()[1:]:
-                cols = line.split()
-                if len(cols) >= 4:
-                    names.append(cols[3])
-            return sorted(set(names))
-        return []
     except Exception:
         return []
 
 
 def engine_name() -> str:
-    if _SYS == "Windows":
-        return "System.Speech (SAPI5)" if _powershell() else ""
-    if _SYS == "Darwin":
-        return "say" if shutil.which("say") else ""
-    for exe in ("espeak-ng", "espeak", "spd-say"):
-        if shutil.which(exe):
-            return exe
-    return ""
+    return "System.Speech (SAPI5)" if _powershell() else ""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -250,40 +221,6 @@ class SystemTTS:
             raise RuntimeError(r.stderr.decode("utf-8", "replace")[:200]
                                or "the speech engine failed")
 
-    def _macos(self, text_file: str, wav_file: str) -> None:
-        args = ["say", "-f", text_file, "-o", wav_file,
-                # Ask for exactly what the speaker wants, so nothing is
-                # resampled on the way out.
-                "--data-format=LEI16@24000"]
-        if self.voice:
-            args[1:1] = ["-v", self.voice]
-        if self.rate:
-            # `say` takes words per minute; 175 is its default, and the -10..10
-            # scale is mapped onto it so one setting means the same thing on
-            # every platform.
-            args[1:1] = ["-r", str(max(90, min(400, 175 + self.rate * 15)))]
-        r = _run(args)
-        if r.returncode != 0:
-            raise RuntimeError(r.stderr.decode("utf-8", "replace")[:200]
-                               or "`say` failed")
-
-    def _linux(self, text_file: str, wav_file: str) -> None:
-        exe = shutil.which("espeak-ng") or shutil.which("espeak")
-        if exe:
-            args = [exe, "-f", text_file, "-w", wav_file]
-            if self.voice:
-                args += ["-v", self.voice]
-            if self.rate:
-                args += ["-s", str(max(80, min(450, 175 + self.rate * 15)))]
-            r = _run(args)
-            if r.returncode != 0:
-                raise RuntimeError(r.stderr.decode("utf-8", "replace")[:200]
-                                   or "espeak-ng failed")
-            return
-        raise RuntimeError(
-            "no speech engine found — install espeak-ng "
-            "(apt install espeak-ng, dnf install espeak-ng, pacman -S espeak-ng)")
-
     def _synth_blocking(self, text: str) -> bytes:
         # Both files are created and closed before the engine is pointed at
         # them: on Windows a file still open in this process cannot be written
@@ -295,12 +232,7 @@ class SystemTTS:
         try:
             with open(txt, "w", encoding="utf-8") as f:
                 f.write(text)
-            if _SYS == "Windows":
-                self._windows(txt, wav)
-            elif _SYS == "Darwin":
-                self._macos(txt, wav)
-            else:
-                self._linux(txt, wav)
+            self._windows(txt, wav)
             with open(wav, "rb") as f:
                 return f.read()
         finally:
@@ -344,9 +276,7 @@ class SystemTTS:
 
     def probe(self) -> tuple[bool, str]:
         if not self._engine:
-            if _SYS == "Linux":
-                return False, "No speech engine — install espeak-ng."
-            return False, "No speech engine was found on this system."
+            return False, "PowerShell/System.Speech was not found on Windows."
         try:
             wav = self._synth_blocking("ok")
             pcm = audio.wav_to_pcm(wav, audio.SPEAKER_RATE)
