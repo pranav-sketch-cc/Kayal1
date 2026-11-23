@@ -8,33 +8,15 @@ noisy room, or when you simply do not feel like saying a name out loud, a key
 you hold is faster and never mishears. It is also the natural way to use the
 assistant while another window has focus.
 
-How it works, and what it costs
--------------------------------
-Zero new dependencies, best available mechanism per platform:
-
-* **Windows** — `GetAsyncKeyState` polled from one small thread. This is
-  deliberately *not* `RegisterHotKey`, which only reports a press: push-to-talk
-  needs the release too, and it needs to work while another application has
-  focus. Polling two virtual-key codes 30 times a second is a rounding error of
-  CPU and needs no message loop.
-* **macOS / Linux** — no portable way to read global key state without pulling
-  in a new package or asking for accessibility permissions, so the chord is
-  bound as an application shortcut instead: it works whenever the assistant's
-  window has focus. `scope` reports which of the two you got, so the UI can say
-  so honestly rather than pretending.
-
-The class never raises. If the platform hook cannot be installed it simply
-reports `scope == "window"` and the Qt shortcut carries it.
+Windows global hook: GetAsyncKeyState is polled from a small thread. The release edge is detected as well as the press, and the key works while another window has focus. If the hook fails, scope reports window fallback.
 """
 
 from __future__ import annotations
 
-import platform
 import threading
 import time
 from typing import Callable
 
-_OS = platform.system()
 
 # The default chord. Ctrl+Space is free in most desktop environments and is the
 # same finger shape on every keyboard layout, which matters for a worldwide app.
@@ -104,7 +86,7 @@ class PushToTalk:
         """Begin watching. Returns the scope actually achieved."""
         self.stop()
         self._stop.clear()
-        if _OS == "Windows" and self._can_poll():
+        if self._can_poll():
             self._scope = "global"
             self._thread = threading.Thread(
                 target=self._poll_loop, name="push-to-talk", daemon=True)
