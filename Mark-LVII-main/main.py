@@ -1,6 +1,10 @@
 import platform as _platform
 import subprocess as _subprocess
 
+import sys as _sys
+if _sys.platform != "win32":
+    raise RuntimeError("Kayal is supported on Windows only.")
+
 # ── Nuclear: force CREATE_NO_WINDOW on EVERY subprocess call on Windows ───────
 # This patches Popen itself, so no per-file flag is needed anywhere.
 if _platform.system() == "Windows":
