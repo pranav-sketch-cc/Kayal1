@@ -10,7 +10,7 @@ def _scripts_dir():
     return d
 
 def _sanitise(text, max_len=200):
-    return text.replace("\\", "").replace('"', "").replace("'", "").replace("\\n", " ").replace("\\r", "").strip()[:max_len]
+    return text.replace("\\", "").replace('"', "").replace("'", "").replace("\n", " ").replace("\\r", "").strip()[:max_len]
 
 def _write_notify_script(task_name, message):
     script_path = _scripts_dir() / f"{task_name}.py"
@@ -52,22 +52,22 @@ def _schedule_windows(target_dt, task_name, script_path, message):
         python_exe = pythonw
     xml_path = _scripts_dir() / f"{task_name}.xml"
     xml_content = (
-        '<?xml version="1.0" encoding="UTF-16"?>\\n'
-        '<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">\\n'
-        '  <RegistrationInfo><Description>Kayal Reminder</Description></RegistrationInfo>\\n'
-        '  <Triggers><TimeTrigger>\\n'
-        f'    <StartBoundary>{target_dt.strftime("%Y-%m-%dT%H:%M:%S")}</StartBoundary>\\n'
-        '    <Enabled>true</Enabled>\\n'
-        '  </TimeTrigger></Triggers>\\n'
-        '  <Actions><Exec>\\n'
-        f'    <Command>{python_exe}</Command>\\n'
-        f'    <Arguments>"{script_path}"</Arguments>\\n'
-        '  </Exec></Actions>\\n'
-        '  <Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>\\n'
-        '    <StartWhenAvailable>true</StartWhenAvailable><Enabled>true</Enabled>\\n'
-        '    <ExecutionTimeLimit>PT5M</ExecutionTimeLimit></Settings>\\n'
-        '  <Principals><Principal><LogonType>InteractiveToken</LogonType>\\n'
-        '    <RunLevel>LeastPrivilege</RunLevel></Principal></Principals>\\n'
+        '<?xml version="1.0" encoding="UTF-16"?>\n'
+        '<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">\n'
+        '  <RegistrationInfo><Description>Kayal Reminder</Description></RegistrationInfo>\n'
+        '  <Triggers><TimeTrigger>\n'
+        f'    <StartBoundary>{target_dt.strftime("%Y-%m-%dT%H:%M:%S")}</StartBoundary>\n'
+        '    <Enabled>true</Enabled>\n'
+        '  </TimeTrigger></Triggers>\n'
+        '  <Actions><Exec>\n'
+        f'    <Command>{python_exe}</Command>\n'
+        f'    <Arguments>"{script_path}"</Arguments>\n'
+        '  </Exec></Actions>\n'
+        '  <Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>\n'
+        '    <StartWhenAvailable>true</StartWhenAvailable><Enabled>true</Enabled>\n'
+        '    <ExecutionTimeLimit>PT5M</ExecutionTimeLimit></Settings>\n'
+        '  <Principals><Principal><LogonType>InteractiveToken</LogonType>\n'
+        '    <RunLevel>LeastPrivilege</RunLevel></Principal></Principals>\n'
         '</Task>'
     )
     xml_path.write_text(xml_content, encoding="utf-16")
