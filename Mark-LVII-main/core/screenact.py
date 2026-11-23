@@ -490,7 +490,7 @@ def _wheel(direction: str, notches: int) -> None:
     horizontal = d.startswith(("l", "r"))
     # Up and right are positive on every platform's scroll API.
     sign = 1 if d.startswith(("u", "r")) else -1
-    amount = sign * notches * _NOTCH.get(_OS, 1)
+    amount = sign * notches * _NOTCH
     if not horizontal:
         pyautogui.scroll(amount)
         return
