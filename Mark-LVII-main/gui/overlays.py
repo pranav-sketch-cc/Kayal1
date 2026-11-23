@@ -130,7 +130,7 @@ class SetupOverlay(QWidget):
             }}
             QPushButton:hover {{ color: {C.TEXT}; border: 1px solid {C.BORDER_B}; }}
         """)
-        local_btn.clicked.connect(lambda: self.done.emit("", self._sel_os))
+        local_btn.clicked.connect(lambda: self.done.emit("", "windows"))
         layout.addWidget(local_btn)
 
     def _submit(self):
