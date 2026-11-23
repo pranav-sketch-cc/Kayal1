@@ -8,17 +8,7 @@ WHY THIS ONE EXISTS AT ALL
     something has been fetched, and it works in one language until something
     else has been fetched.
 
-    Every one of the three supported systems already ships a speech synthesiser
-    with the languages its owner installed. Nothing to download, nothing to
-    build, no model files in the repository. It is not as good as a neural
-    voice. It is available immediately, everywhere, which for a fallback matters
-    more.
-
-        Windows   System.Speech (SAPI5), driven through PowerShell
-        macOS     `say`
-        Linux     `espeak-ng`, or `spd-say` where that is what is installed
-
-    THE HONEST LIMIT: it speaks the languages the machine has VOICES for, which
+    Windows ships System.Speech (SAPI5), driven through PowerShell.\n\n    THE HONEST LIMIT: it speaks the languages the machine has VOICES for, which
     is not the same as the languages the machine displays. Measured on an
     ordinary Windows 10 install: two voices, both English. A Turkish sentence
     came out as English phonetics — poor, but audible; a Russian one came out as
@@ -104,9 +94,7 @@ def _powershell() -> Optional[str]:
 # ─────────────────────────────────────────────────────────────────────────────
 #  Listing the voices the machine actually has
 # ─────────────────────────────────────────────────────────────────────────────
-# Enumerating voices costs a subprocess — PowerShell on Windows, `say -v ?` on
-# macOS, `espeak-ng --voices` on Linux. Measured on Windows: **1.70 seconds**,
-# every single call.
+# Enumerating installed voices costs a PowerShell subprocess — about 1.70 seconds.
 #
 # The panel rebuilds its form on every dropdown change, and each rebuild asks
 # for this list, so an uncached version freezes the interface for the better
