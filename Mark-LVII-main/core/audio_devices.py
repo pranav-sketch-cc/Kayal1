@@ -86,14 +86,7 @@ _chosen_api: dict = {"input": None, "output": None}
 # audio actually move), per direction. On this platform that lands on
 # DirectSound for the microphone and MME for the speakers — a split that no
 # amount of reasoning would have produced.
-_PREFERRED_APIS = {
-    "Windows": ("directsound", "mme", "wasapi"),
-    # macOS has only Core Audio, so there is nothing to disambiguate.
-    "Darwin":  ("core audio",),
-    # PulseAudio/PipeWire present one clean endpoint per device; raw ALSA
-    # presents dozens of routing permutations of the same card.
-    "Linux":   ("pulse", "pipewire", "jack", "alsa"),
-}
+_PREFERRED_APIS = {"Windows": ("directsound", "mme", "wasapi")}
 
 # ── "It opens" is not "it works" ─────────────────────────────────────────────
 #
@@ -262,8 +255,7 @@ def _query() -> dict[str, list[str]]:
     Only real, selectable devices — see the note above."""
     out: dict[str, list[str]] = {"input": [], "output": []}
     try:
-        import platform
-        import sounddevice as sd
+                import sounddevice as sd
 
         devices = list(sd.query_devices())
         try:
@@ -271,7 +263,7 @@ def _query() -> dict[str, list[str]]:
         except Exception:
             apis = []
 
-        preferred = _PREFERRED_APIS.get(platform.system(), ())
+        preferred = _PREFERRED_APIS.get("Windows", ())
 
         def _collect(api_filter, kind) -> list[tuple[int, str]]:
             """(index, name) for named, non-pseudo devices on one side that can
@@ -363,7 +355,6 @@ def resolve(name: str, kind: str):
         return None
 
     try:
-        import platform
         import sounddevice as sd
 
         devices = list(sd.query_devices())
@@ -392,7 +383,7 @@ def resolve(name: str, kind: str):
         list_devices(kind)
         chosen = _chosen_api.get(kind)
         orders = ([chosen] if chosen is not None else []) \
-            + [a for a in _PREFERRED_APIS.get(platform.system(), ()) if a != chosen] \
+            + [a for a in _PREFERRED_APIS.get("Windows", ()) if a != chosen] \
             + [None]
 
         # A candidate only counts if it can be opened at the rate this side runs
@@ -627,7 +618,7 @@ def _endpoint_for(name: str):
 
 def _platform_is() -> str:
     import platform
-    return platform.system()
+    return "Windows"
 
 
 def _fold(text: str) -> str:
