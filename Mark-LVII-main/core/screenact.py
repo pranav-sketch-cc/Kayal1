@@ -179,41 +179,11 @@ def _fail(action: str, error: str, **kw) -> Act:
     return Act(ok=False, action=action, error=error, **kw)
 
 
-# ---------------------------------------------------------------------------
-# Can this machine be driven at all?
-#
-# Asked once and cached. platform_support.detect() reads the environment and
-# the OS, neither of which changes inside a session, and asking it before every
-# keystroke would put a filesystem probe in the input path.
-# ---------------------------------------------------------------------------
-_support: Any = None
-_support_lock = threading.Lock()
-
-
-def _permitted() -> tuple[bool, str]:
-    """(may we drive input, why not). Never raises."""
-    global _support
-    with _support_lock:
-        if _support is None:
-            try:
-                from core import platform_support
-                _support = platform_support.detect()
-            except Exception:
-                _support = False        # sentinel: could not tell, assume yes
-    if _support is False or _support is None:
-        return True, ""
-    if getattr(_support, "can_control_input", True):
-        return True, ""
-    notes = "; ".join(getattr(_support, "notes", []) or [])
-    return False, (notes or "this session does not permit programs to drive "
-                            "the keyboard and mouse")
-
-
 def available() -> tuple[bool, str]:
     """Is actuation possible here at all? ((True, "") when it is.)"""
     if not _HAS_PYAUTOGUI:
         return False, "pyautogui is not installed. Run: pip install pyautogui"
-    return _permitted()
+    return True, ""
 
 
 # ---------------------------------------------------------------------------
@@ -511,7 +481,7 @@ def drag(start: Target, end: Target, *, duration: float = 0.45) -> Act:
 #
 # The old code sent 120 everywhere, which was right on Windows and asked macOS
 # for 360 lines and X11 for 360 separate wheel clicks per notch.
-_NOTCH = {"windows": 120, "mac": 3, "linux": 1}
+_NOTCH = 120
 
 
 def _wheel(direction: str, notches: int) -> None:
@@ -579,7 +549,7 @@ def scroll(direction: str = "down", amount: int = 3, *,
 # anybody's language: "enter" is the name of a key in the library's vocabulary,
 # the same way "Button" is the name of a role in UIA's.
 # ---------------------------------------------------------------------------
-_OS = {"Windows": "windows", "Darwin": "mac"}.get(_platform.system(), "linux")
+_OS = "windows"
 
 _KEY_ALIASES = {
     "return": "enter", "cr": "enter", "newline": "enter",
@@ -612,13 +582,9 @@ def normalise_key(name: str) -> str:
     Control key on a Mac is written "macctrl".
     """
     key = str(name or "").strip().lower()
-    if key == "macctrl":
-        return "ctrl"
     key = _KEY_ALIASES.get(key, key)
-    if key in ("ctrl", "command"):
-        return "command" if _OS == "mac" else "ctrl"
-    if key == "winleft" and _OS == "mac":
-        key = "command"
+    if key == "command":
+        key = "ctrl"
     return key
 
 
@@ -748,8 +714,7 @@ def _deliver_text(text: str) -> tuple[str, str]:
     if not text:
         return "nothing to type", ""
     reasons: list[str] = []
-    native = {"windows": _type_windows, "mac": _type_mac,
-              "linux": _type_linux}.get(_OS)
+    native = _type_windows
     if native is not None:
         try:
             problem = native(text)
@@ -843,64 +808,6 @@ def _type_windows(text: str) -> Optional[str]:
             return (f"Windows accepted {sent} of {len(chunk)} input records "
                     f"(error {ctypes.get_last_error()})")
         time.sleep(0.01)
-    return None
-
-
-def _type_mac(text: str) -> Optional[str]:
-    """Quartz keyboard events carrying Unicode strings. None on success."""
-    import Quartz
-
-    RETURN, TAB = 36, 48          # virtual key codes; positions, not letters
-
-    def post_string(chunk: str) -> None:
-        units = len(chunk.encode("utf-16-le")) // 2
-        for down in (True, False):
-            event = Quartz.CGEventCreateKeyboardEvent(None, 0, down)
-            Quartz.CGEventKeyboardSetUnicodeString(event, units, chunk)
-            Quartz.CGEventPost(Quartz.kCGHIDEventTap, event)
-        time.sleep(0.008)
-
-    def post_key(code: int) -> None:
-        for down in (True, False):
-            Quartz.CGEventPost(Quartz.kCGHIDEventTap,
-                               Quartz.CGEventCreateKeyboardEvent(None, code, down))
-        time.sleep(0.008)
-
-    # macOS reads at most 20 UTF-16 units from one event, so text goes in short
-    # runs that never split a character.
-    run = ""
-    for ch in text.replace("\r\n", "\n").replace("\r", "\n"):
-        if ch in "\n\t":
-            if run:
-                post_string(run)
-                run = ""
-            post_key(RETURN if ch == "\n" else TAB)
-            continue
-        if len((run + ch).encode("utf-16-le")) // 2 > 16:
-            post_string(run)
-            run = ""
-        run += ch
-    if run:
-        post_string(run)
-    return None
-
-
-def _type_linux(text: str) -> Optional[str]:
-    """xdotool on X11. None on success, else why not."""
-    import shutil
-    import subprocess
-
-    if os.environ.get("WAYLAND_DISPLAY") and not os.environ.get("DISPLAY"):
-        return "a Wayland session does not accept typed input from programs"
-    tool = shutil.which("xdotool")
-    if not tool:
-        return "xdotool is not installed"
-    result = subprocess.run(
-        [tool, "type", "--clearmodifiers", "--delay", "8", "--", text],
-        capture_output=True, timeout=max(10.0, len(text) * 0.05))
-    if result.returncode != 0:
-        return (result.stderr or b"").decode("utf-8", "replace").strip() \
-            or f"xdotool exited with {result.returncode}"
     return None
 
 
