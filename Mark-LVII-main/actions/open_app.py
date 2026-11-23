@@ -35,7 +35,6 @@ WHY IT IS NOT A LIST OF APPLICATIONS
     work exactly as well as the software we have.
 """
 import os
-import platform
 import shutil
 import subprocess
 import threading
@@ -47,7 +46,7 @@ from core.lazyimport import LazyModule, installed
 _PYAUTOGUI = installed("pyautogui")
 pyautogui = LazyModule("pyautogui")
 
-_SYSTEM = platform.system()          # "Windows" | "Darwin" | "Linux"
+_SYSTEM = "Windows"
 
 # How long to keep watching for the application to appear. Chosen from the two
 # ends of the range rather than the middle: a text editor is up in a fraction
@@ -75,10 +74,7 @@ def _desktop_search(app_name: str) -> bool:
     if not _PYAUTOGUI:
         return False
     try:
-        if _SYSTEM == "Darwin":
-            pyautogui.hotkey("command", "space")
-        else:
-            pyautogui.press("win")
+        pyautogui.press("win")
         time.sleep(_SEARCH_SETTLE)
         pyautogui.write(app_name, interval=0.05)
         time.sleep(_SEARCH_SETTLE)
@@ -128,99 +124,8 @@ def _launch_windows(app_name: str) -> bool:
     return _desktop_search(app_name)
 
 
-def _launch_macos(app_name: str) -> bool:
-    for candidate in (app_name, f"{app_name}.app"):
-        try:
-            result = subprocess.run(
-                ["open", "-a", candidate], capture_output=True, timeout=8
-            )
-            if result.returncode == 0:
-                return True
-        except Exception:
-            pass
 
-    binary = shutil.which(app_name) or shutil.which(app_name.lower())
-    if binary:
-        try:
-            subprocess.Popen(
-                [binary], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-            )
-            return True
-        except Exception:
-            pass
-
-    return _desktop_search(app_name)
-
-
-_LINUX_TERMINALS = [
-    "x-terminal-emulator", "gnome-terminal", "konsole", "xfce4-terminal",
-    "xterm", "lxterminal", "mate-terminal", "tilix", "alacritty", "kitty",
-]
-
-
-def _launch_linux(app_name: str) -> bool:
-    # "terminal" means whichever one this distribution actually ships.
-    if app_name in ("x-terminal-emulator", "gnome-terminal", "terminal"):
-        for term in _LINUX_TERMINALS:
-            path = shutil.which(term)
-            if not path:
-                continue
-            try:
-                subprocess.Popen(
-                    [path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-                )
-                return True
-            except Exception:
-                continue
-
-    binary = (
-        shutil.which(app_name)
-        or shutil.which(app_name.lower())
-        or shutil.which(app_name.lower().replace(" ", "-"))
-        or shutil.which(app_name.lower().replace(" ", "_"))
-    )
-    if binary:
-        try:
-            subprocess.Popen(
-                [binary], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-            )
-            return True
-        except Exception:
-            pass
-
-    for name in (
-        app_name.lower(),
-        app_name.lower().replace(" ", "-"),
-        app_name.lower().replace(" ", ""),
-    ):
-        try:
-            result = subprocess.run(
-                ["gtk-launch", name], capture_output=True, timeout=5
-            )
-            if result.returncode == 0:
-                return True
-        except FileNotFoundError:
-            break
-        except Exception:
-            pass
-
-    try:
-        result = subprocess.run(
-            ["xdg-open", app_name], capture_output=True, timeout=5
-        )
-        if result.returncode == 0:
-            return True
-    except Exception:
-        pass
-
-    return _desktop_search(app_name)
-
-
-_LAUNCHERS = {
-    "Windows": _launch_windows,
-    "Darwin": _launch_macos,
-    "Linux": _launch_linux,
-}
+_LAUNCHERS = {"Windows": _launch_windows}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
