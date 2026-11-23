@@ -496,7 +496,7 @@ def _keep_context_of(exc: BaseException) -> bool:
 class JarvisLive:
     def __init__(self, ui: JarvisUI):
         # Platform limits are announced once per run, not once per
-        # reconnect: a dropped connection is not news about Wayland.
+        # reconnect: transient connection failures are handled below.
         self._platform_notes_shown = False
         self.ui             = ui
         self._asst_name     = "JARVI    S"   # updated each session from config
