@@ -7,9 +7,7 @@
 # fresh clone on the day it ships. Minor and patch updates flow in freely.
 
 # ── Core: UI, audio, Gemini Live ──────────────────────────────────────────────
-# PyQt6 and numpy also carry the holographic avatar: the head is rendered in
-# software with QPainter and posed with numpy, so the face costs no extra
-# package, no OpenGL and no GPU. Nothing below was added for it.
+# Windows desktop assistant dependencies.
 PyQt6>=6.6,<7
 sounddevice>=0.4,<1
 numpy>=1.24,<3
@@ -73,16 +71,13 @@ openpyxl                     # excel_writer — spreadsheet output
 youtube-transcript-api       # youtube_video — transcript fetch for summaries
 pygetwindow                  # game_updater, chat_takeover — window geometry
 
-# ── Windows-only (pip skips these automatically on macOS / Linux) ─────────────
-comtypes;   sys_platform == "win32"
-pycaw;      sys_platform == "win32"
-win10toast; sys_platform == "win32"
-pywin32;    sys_platform == "win32"
-wmi;        sys_platform == "win32"
-# pywinauto drives the Windows accessibility tree. Three plugins read it:
-# screen_agent (to aim without a model call), the WhatsApp pair, and
-# game_updater (Steam's install dialog).
-pywinauto;  sys_platform == "win32"
+# ── Windows desktop automation ───────────────────────────────────────────────
+comtypes
+pycaw
+win10toast
+pywin32
+wmi
+pywinauto
 
 # ── Documents, media & hardware readouts ──────────────────────────────────────
 # Also try/except-guarded at the point of use. They are declared because a
