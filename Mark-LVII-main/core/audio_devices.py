@@ -255,7 +255,7 @@ def _query() -> dict[str, list[str]]:
     Only real, selectable devices — see the note above."""
     out: dict[str, list[str]] = {"input": [], "output": []}
     try:
-                import sounddevice as sd
+        import sounddevice as sd
 
         devices = list(sd.query_devices())
         try:
