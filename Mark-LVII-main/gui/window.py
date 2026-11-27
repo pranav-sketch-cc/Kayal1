@@ -1952,7 +1952,7 @@ class MainWindow(QMainWindow):
         # setHtml jumps to the top; put the reader back where they were.
         bar.setValue(keep)
         if first:
-        self._reveal_below_hud(self._content_panel, 260)
+            self._reveal_below_hud(self._content_panel, 260)
 
     # ── document review ──────────────────────────────────────────────────────
     # Rendered as rich text into the content panel that already exists, rather
