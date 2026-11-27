@@ -131,9 +131,9 @@ class MainWindow(QMainWindow):
         # Older builds saved the former cyan default (#00d4ff) in config.
         # Treat that legacy default as "no custom accent" so the new rose
         # identity is not silently shifted back to cyan on startup.
-        _legacy_default = "#00d4ff"
+        _legacy_defaults = {"#00d4ff", "#ff4fa3"}
         if (_ui_color and _ui_color.lower() not in
-                {DEFAULT_UI_COLOR.lower(), _legacy_default}):
+                {DEFAULT_UI_COLOR.lower(), *_legacy_defaults}):
             apply_ui_accent(_ui_color)
 
         self.setWindowTitle(f"{_display} — {APP_VERSION}")
