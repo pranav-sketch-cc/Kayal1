@@ -173,6 +173,7 @@ class MainWindow(QMainWindow):
         body.setSpacing(10)
 
         self._left_panel = self._build_left_panel()
+        self._left_panel.hide()
         body.addWidget(self._left_panel, stretch=0)
 
         # Center column: HUD + resizable content panel via QSplitter
@@ -366,6 +367,7 @@ class MainWindow(QMainWindow):
         body.addWidget(self._center_split, stretch=5)
 
         self._right_panel = self._build_right_panel()
+        self._right_panel.hide()
         body.addWidget(self._right_panel, stretch=0)
 
         root.addLayout(body, stretch=1)
@@ -1234,7 +1236,47 @@ class MainWindow(QMainWindow):
         self._sub_lbl.setStyleSheet(f"color: {C.PRI_DIM}; background: transparent;")
         name_col.addWidget(self._sub_lbl)
         lay.addLayout(name_col)
-        lay.addSpacing(8)
+        lay.addSpacing(18)
+
+        # Side workspaces stay tucked away until requested. This keeps the
+        # assistant's neural core and conversation as the visual focus instead
+        # of showing every diagnostic and utility panel at once.
+        def _workspace_button(label: str, tooltip: str) -> QPushButton:
+            button = QPushButton(label)
+            button.setCheckable(True)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            button.setFont(px_font(9, QFont.Weight.DemiBold, spacing=1.2))
+            button.setStyleSheet(f"""
+                QPushButton {{
+                    color: {C.TEXT_DIM};
+                    background: transparent;
+                    border: 1px solid {C.BORDER};
+                    border-radius: 10px;
+                    padding: 7px 12px;
+                }}
+                QPushButton:checked {{
+                    color: {C.WHITE};
+                    background: {C.PRI_GHO};
+                    border: 1px solid {C.PRI};
+                }}
+                QPushButton:hover {{
+                    color: {C.WHITE};
+                    border-color: {C.PRI_DIM};
+                }}
+            """)
+            button.setToolTip(tooltip)
+            return button
+
+        self._systems_nav_btn = _workspace_button("SYSTEMS", "Show system metrics and background activity")
+        self._systems_nav_btn.clicked.connect(
+            lambda checked: self._toggle_side_panel("systems", checked))
+        lay.addWidget(self._systems_nav_btn)
+
+        self._console_nav_btn = _workspace_button("CONSOLE", "Show conversation log and command controls")
+        self._console_nav_btn.clicked.connect(
+            lambda checked: self._toggle_side_panel("console", checked))
+        lay.addWidget(self._console_nav_btn)
 
         # Two drawers, and the split is by how often a thing is touched: the
         # ones you set once behind the gear, the everyday switches behind the
@@ -1298,6 +1340,18 @@ class MainWindow(QMainWindow):
         # is still in STATUS.
         if hasattr(self, "_net_panel"):
             self._net_panel.setVisible(self.height() >= 820)
+
+    def _toggle_side_panel(self, panel: str, visible: bool) -> None:
+        """Show one optional workspace panel without crowding the home view."""
+        if panel == "systems":
+            self._left_panel.setVisible(visible)
+            if visible:
+                self._systems_nav_btn.setChecked(True)
+        elif panel == "console":
+            self._right_panel.setVisible(visible)
+            if visible:
+                self._console_nav_btn.setChecked(True)
+        self._fit_side_columns()
 
     def _refresh_identity_rows(self) -> None:
         """Engine and voice, read from config — on start and whenever they change."""
