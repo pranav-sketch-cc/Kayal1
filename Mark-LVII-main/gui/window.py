@@ -128,7 +128,12 @@ class MainWindow(QMainWindow):
 
         # Apply the saved UI colour BEFORE panels/stylesheets are built
         _ui_color = (_cfg.get("ui_color") or "").strip()
-        if _ui_color and _ui_color.lower() != DEFAULT_UI_COLOR:
+        # Older builds saved the former cyan default (#00d4ff) in config.
+        # Treat that legacy default as "no custom accent" so the new rose
+        # identity is not silently shifted back to cyan on startup.
+        _legacy_default = "#00d4ff"
+        if (_ui_color and _ui_color.lower() not in
+                {DEFAULT_UI_COLOR.lower(), _legacy_default}):
             apply_ui_accent(_ui_color)
 
         self.setWindowTitle(f"{_display} — {APP_VERSION}")
@@ -160,17 +165,52 @@ class MainWindow(QMainWindow):
         self._customize_overlay: CustomizeOverlay | None = None
 
         central = QWidget()
-        central.setStyleSheet(f"background: {C.BG};")
+        central.setObjectName("KayalRoot")
+        central.setStyleSheet(f"""
+            QWidget#KayalRoot {{
+                background: {C.BG};
+                color: {C.WHITE};
+            }}
+            QToolTip {{
+                color: {C.WHITE};
+                background: {C.PANEL2};
+                border: 1px solid {C.BORDER_B};
+                padding: 6px 9px;
+                border-radius: 6px;
+            }}
+        """)
         self.setCentralWidget(central)
+        self.setStyleSheet(f"""
+            QMainWindow {{
+                background: {C.BG};
+            }}
+            QScrollBar:vertical {{
+                background: {C.PANEL};
+                width: 7px;
+                margin: 3px 1px;
+                border-radius: 3px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: {C.BORDER_B};
+                min-height: 24px;
+                border-radius: 3px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: {C.PRI_DIM};
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0;
+            }}
+        """)
 
         root = QVBoxLayout(central)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
+        root.setContentsMargins(14, 12, 14, 10)
+        root.setSpacing(10)
         root.addWidget(self._build_header())
 
         body = QHBoxLayout()
-        body.setContentsMargins(10, 10, 10, 10)
-        body.setSpacing(10)
+        body.setContentsMargins(4, 4, 4, 4)
+        body.setSpacing(12)
 
         self._left_panel = self._build_left_panel()
         self._left_panel.hide()
@@ -1216,7 +1256,14 @@ class MainWindow(QMainWindow):
 
     def _build_header(self) -> QWidget:
         w = HeaderBar()
-        w.setFixedHeight(58)
+        w.setFixedHeight(66)
+        w.setStyleSheet(f"""
+            HeaderBar {{
+                background: {C.PANEL};
+                border: 1px solid {C.BORDER};
+                border-radius: 15px;
+            }}
+        """)
         self._header = w
         lay = QHBoxLayout(w)
         lay.setContentsMargins(14, 6, 14, 8)
